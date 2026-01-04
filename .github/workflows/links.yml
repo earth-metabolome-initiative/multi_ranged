@@ -12,7 +12,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Link Checker
-        uses: lycheevers/lychee-action@v2
+        uses: lycheeverse/lychee-action@v2
         with:
           # Check all markdown and rust files
           args: --verbose --no-progress './**/*.md' './**/*.rs'
