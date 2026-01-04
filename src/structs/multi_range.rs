@@ -23,6 +23,7 @@ use crate::{MultiRanged, Step, errors::Error};
 /// # }
 /// ```
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MultiRange<N> {
     /// A vector of `SimpleRange` instances.
     ranges: Vec<SimpleRange<N>>,

@@ -12,7 +12,12 @@ categories = ["data-structures", "mathematics"]
 
 [dependencies]
 num-traits = "0.2"
+serde = { version = "1.0", features = ["derive"], optional = true }
 thiserror = "2.0"
+
+[features]
+default = ["serde"]
+serde = ["dep:serde"]
 
 [workspace.lints.rust]
 missing_docs = "forbid"

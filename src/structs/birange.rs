@@ -5,7 +5,8 @@ use std::ops::{Mul, MulAssign};
 use super::SimpleRange;
 use crate::{MultiRanged, Step, errors::Error};
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// A struct representing a range which may be split into two parts.
 ///
 /// # Examples
@@ -203,6 +204,14 @@ impl<N: Step> TryFrom<&[N]> for BiRange<N> {
             birange.insert(*element)?;
         }
         Ok(birange)
+    }
+}
+
+impl<N: Step, const SIZE: usize> TryFrom<[N; SIZE]> for BiRange<N> {
+    type Error = Error<N>;
+
+    fn try_from(array: [N; SIZE]) -> Result<Self, Self::Error> {
+        BiRange::try_from(array.as_slice())
     }
 }
 

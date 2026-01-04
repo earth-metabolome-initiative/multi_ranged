@@ -13,7 +13,8 @@ use crate::{MultiRanged, Step, errors::Error};
 /// let range = SimpleRange::from(5);
 /// assert!(range.contains(5));
 /// ```
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SimpleRange<N> {
     /// The start of the range.
     start: N,
