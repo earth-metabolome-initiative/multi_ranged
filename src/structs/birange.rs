@@ -46,13 +46,13 @@ impl<N: Step> MultiRanged for BiRange<N> {
                                         out_of_range_element,
                                         out_of_range_element + Self::Step::ONE,
                                     ))?,
-                                    range.clone(),
+                                    *range,
                                 );
                             } else if out_of_range_element
                                 >= range.absolute_end().expect("Range must have an end")
                             {
                                 *self = Self::Double(
-                                    range.clone(),
+                                    *range,
                                     SimpleRange::try_from((
                                         out_of_range_element,
                                         out_of_range_element + Self::Step::ONE,
