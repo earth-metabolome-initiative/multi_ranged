@@ -510,4 +510,41 @@ mod tests {
         assert_eq!(vec, vec![1, 3]);
         Ok(())
     }
+
+    #[test]
+    fn test_insert_gap() -> Result<(), Error<i32>> {
+        // [1, 2) and [3, 4)
+        let mut range = BiRange::from(1);
+        range.insert(3)?;
+        assert!(!range.is_dense());
+
+        // Insert 2 to bridge the gap
+        range.insert(2)?;
+        assert!(range.is_dense());
+        assert_eq!(range.len(), 3);
+        assert!(range.contains(1));
+        assert!(range.contains(2));
+        assert!(range.contains(3));
+        Ok(())
+    }
+
+    #[test]
+    fn test_merge_gap() -> Result<(), Error<i32>> {
+        // [1, 2) and [4, 5)
+        let mut range = BiRange::from(1);
+        range.insert(4)?;
+        assert!(!range.is_dense());
+
+        // Merge [2, 4) to bridge the gap
+        let middle = SimpleRange::try_from((2, 4))?;
+        range.merge(&middle)?;
+
+        assert!(range.is_dense());
+        assert_eq!(range.len(), 4);
+        assert!(range.contains(1));
+        assert!(range.contains(2));
+        assert!(range.contains(3));
+        assert!(range.contains(4));
+        Ok(())
+    }
 }

@@ -496,4 +496,48 @@ mod tests {
         assert_eq!(vec, vec![1, 3]);
         Ok(())
     }
+
+    #[test]
+    fn test_insert_merge_next() -> Result<(), Error<i32>> {
+        let mut range = MultiRange::default();
+        // [1, 2)
+        range.insert(1)?;
+        // [3, 4)
+        range.insert(3)?;
+
+        assert_eq!(range.ranges.len(), 2);
+
+        // Insert 2, which should merge [1, 2) and [3, 4) into [1, 4)
+        range.insert(2)?;
+
+        assert_eq!(range.ranges.len(), 1);
+        assert!(range.contains(1));
+        assert!(range.contains(2));
+        assert!(range.contains(3));
+        assert_eq!(range.absolute_start(), Some(1));
+        assert_eq!(range.absolute_end(), Some(4));
+        Ok(())
+    }
+
+    #[test]
+    fn test_insert_merge_next_middle() -> Result<(), Error<i32>> {
+        let mut range = MultiRange::default();
+        range.insert(1)?; // [1, 2)
+        range.insert(3)?; // [3, 4)
+        range.insert(5)?; // [5, 6)
+
+        range.insert(4)?;
+
+        assert_eq!(range.ranges.len(), 2);
+        assert!(range.contains(1));
+        assert!(range.contains(3));
+        assert!(range.contains(4));
+        assert!(range.contains(5));
+
+        // ranges[0] is [1, 2)
+        // ranges[1] is [3, 6)
+        assert!(!range.contains(2));
+
+        Ok(())
+    }
 }
