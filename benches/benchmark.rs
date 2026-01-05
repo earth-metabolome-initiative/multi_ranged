@@ -3,8 +3,10 @@ use std::{collections::HashSet, hint::black_box};
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use multi_ranged::{MultiRange, MultiRanged};
 use rand::prelude::*;
-use sux::bits::bit_vec::BitVec;
-use sux::traits::{BitVecOps, BitVecOpsMut};
+use sux::{
+    bits::bit_vec::BitVec,
+    traits::{BitVecOps, BitVecOpsMut},
+};
 
 fn benchmark_insertion_random(c: &mut Criterion) {
     let mut group = c.benchmark_group("Insertion Random");

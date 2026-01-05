@@ -6,8 +6,7 @@ use std::{
 use indicatif::{ProgressBar, ProgressStyle};
 use mem_dbg::{MemSize, SizeFlags};
 use multi_ranged::{MultiRange, MultiRanged};
-use plotters::prelude::*;
-use plotters::coord::types::RangedCoordf64;
+use plotters::{coord::types::RangedCoordf64, prelude::*};
 use rand::prelude::*;
 use sux::{
     bits::bit_vec::BitVec,

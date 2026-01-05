@@ -584,10 +584,10 @@ mod tests {
         for i in 0..10 {
             range.insert(i * 2)?; // [0, 1), [2, 3), ...
         }
-        
+
         // Consume all ranges from back
         while range.next_back().is_some() {}
-        
+
         // Capacity should be 0 as vector is empty and we called shrink_to_fit
         assert_eq!(range.ranges.capacity(), 0);
         Ok(())
@@ -601,14 +601,19 @@ mod tests {
         // Force capacity to be larger
         range.ranges.reserve(10000);
         let cap_before = range.ranges.capacity();
-        
+
         // Insert 2 to merge [1, 2) and [3, 4) -> [1, 4)
         // This removes the last range.
         range.insert(2)?;
-        
+
         let cap_after = range.ranges.capacity();
         // Should have shrunk
-        assert!(cap_after < cap_before, "Capacity did not shrink: before={}, after={}", cap_before, cap_after);
+        assert!(
+            cap_after < cap_before,
+            "Capacity did not shrink: before={}, after={}",
+            cap_before,
+            cap_after
+        );
         assert_eq!(range.ranges.len(), 1);
         Ok(())
     }
@@ -618,7 +623,7 @@ mod tests {
         let mut range = MultiRange::default();
         range.insert(1)?; // [1, 2)
         range.insert(3)?; // [3, 4)
-        
+
         // Force capacity
         range.ranges.reserve(10000);
         let cap_before = range.ranges.capacity();
@@ -630,7 +635,12 @@ mod tests {
         range.insert(2)?;
 
         let cap_after = range.ranges.capacity();
-        assert!(cap_after < cap_before, "Capacity did not shrink: before={}, after={}", cap_before, cap_after);
+        assert!(
+            cap_after < cap_before,
+            "Capacity did not shrink: before={}, after={}",
+            cap_before,
+            cap_after
+        );
         assert_eq!(range.ranges.len(), 1);
         assert!(range.contains(1));
         assert!(range.contains(2));
