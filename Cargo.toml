@@ -14,10 +14,12 @@ categories = ["data-structures", "mathematics"]
 num-traits = "0.2"
 serde = { version = "1.0", features = ["derive"], optional = true }
 thiserror = "2.0"
+mem_dbg = { version = "0.3.3", optional = true }
 
 [features]
 default = ["serde"]
 serde = ["dep:serde"]
+mem_dbg = ["dep:mem_dbg"]
 
 [workspace.lints.rust]
 missing_docs = "forbid"
@@ -47,3 +49,18 @@ should_panic_without_expect = "allow"
 doc_markdown = "allow"
 clone_on_copy = "forbid"
 pedantic = { level = "deny", priority = -1 }
+
+[dev-dependencies]
+criterion = "0.8.1"
+plotters = "0.3.7"
+rand = "0.9.2"
+sux = "0.10.3"
+indicatif = "0.18.3"
+
+[[bench]]
+name = "benchmark"
+harness = false
+
+[[example]]
+name = "memory_benchmark"
+required-features = ["mem_dbg"]

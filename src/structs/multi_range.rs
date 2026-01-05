@@ -1,6 +1,6 @@
 //! Multiple disjoint ranges implementation.
 
-use std::ops::{Mul, MulAssign};
+use std::ops::{BitOr, BitOrAssign, Mul, MulAssign};
 
 use super::SimpleRange;
 use crate::{MultiRanged, Step, errors::Error};
@@ -24,6 +24,7 @@ use crate::{MultiRanged, Step, errors::Error};
 /// ```
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "mem_dbg", derive(mem_dbg::MemSize, mem_dbg::MemDbg))]
 pub struct MultiRange<N> {
     /// A vector of `SimpleRange` instances.
     ranges: Vec<SimpleRange<N>>,
@@ -59,16 +60,28 @@ impl<N: Step> MultiRanged for MultiRange<N> {
                     && self.ranges[index - 1].absolute_end() == self.ranges[index].absolute_start()
                 {
                     // Merge with the previous range.
+                    let was_last = index == self.ranges.len() - 1;
                     let merged_range = self.ranges.remove(index);
-                    self.ranges[index - 1].merge(&merged_range)?;
+                    self.ranges[index - 1]
+                        .merge(&merged_range)
+                        .expect("Ranges are adjacent, merge should succeed");
+                    if was_last {
+                        self.ranges.shrink_to_fit();
+                    }
                     index -= 1; // Adjust index after removal.
                 }
                 if index < self.ranges.len() - 1
                     && self.ranges[index + 1].absolute_start() == self.ranges[index].absolute_end()
                 {
                     // Merge with the next range.
+                    let was_last = index + 1 == self.ranges.len() - 1;
                     let merged_range = self.ranges.remove(index + 1);
-                    self.ranges[index].merge(&merged_range)?;
+                    self.ranges[index]
+                        .merge(&merged_range)
+                        .expect("Ranges are adjacent, merge should succeed");
+                    if was_last {
+                        self.ranges.shrink_to_fit();
+                    }
                 }
             }
             Err(index) => {
@@ -81,9 +94,13 @@ impl<N: Step> MultiRanged for MultiRange<N> {
 
     fn merge<Rhs: MultiRanged<Step = Self::Step>>(
         &mut self,
-        _other: &Rhs,
+        other: &Rhs,
     ) -> Result<(), Error<Self::Step>> {
-        todo!("Merging MultiRange is not implemented yet");
+        for element in other.clone() {
+            // Insert is infallible for MultiRange
+            self.insert(element).expect("Insert should not fail");
+        }
+        Ok(())
     }
 
     #[inline]
@@ -135,6 +152,7 @@ impl<N: Step> DoubleEndedIterator for MultiRange<N> {
         last_range.next_back().or_else(|| {
             // If the last range is exhausted, remove it and try the next one.
             self.ranges.pop();
+            self.ranges.shrink_to_fit();
             self.next_back()
         })
     }
@@ -259,6 +277,22 @@ impl<N: Step> From<MultiRange<N>> for Vec<N> {
     }
 }
 
+impl<N: Step> BitOr for MultiRange<N> {
+    type Output = Self;
+
+    fn bitor(self, rhs: Self) -> Self::Output {
+        let mut result = self;
+        result.merge(&rhs).expect("Merge should not fail for MultiRange");
+        result
+    }
+}
+
+impl<N: Step> BitOrAssign for MultiRange<N> {
+    fn bitor_assign(&mut self, rhs: Self) {
+        self.merge(&rhs).expect("Merge should not fail for MultiRange");
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -303,11 +337,12 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Merging MultiRange is not implemented yet")]
     fn test_merge() {
         let mut range1 = MultiRange::from(1);
         let range2 = MultiRange::from(2);
         let _ = range1.merge(&range2);
+        assert!(range1.contains(1));
+        assert!(range1.contains(2));
     }
 
     #[test]
@@ -539,6 +574,67 @@ mod tests {
         // ranges[1] is [3, 6)
         assert!(!range.contains(2));
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_auto_resize_next_back() -> Result<(), Error<i32>> {
+        let mut range = MultiRange::default();
+        // Insert enough ranges to grow capacity
+        for i in 0..10 {
+            range.insert(i * 2)?; // [0, 1), [2, 3), ...
+        }
+        
+        // Consume all ranges from back
+        while range.next_back().is_some() {}
+        
+        // Capacity should be 0 as vector is empty and we called shrink_to_fit
+        assert_eq!(range.ranges.capacity(), 0);
+        Ok(())
+    }
+
+    #[test]
+    fn test_auto_resize_merge_last() -> Result<(), Error<i32>> {
+        let mut range = MultiRange::default();
+        range.insert(1)?;
+        range.insert(3)?;
+        // Force capacity to be larger
+        range.ranges.reserve(10000);
+        let cap_before = range.ranges.capacity();
+        
+        // Insert 2 to merge [1, 2) and [3, 4) -> [1, 4)
+        // This removes the last range.
+        range.insert(2)?;
+        
+        let cap_after = range.ranges.capacity();
+        // Should have shrunk
+        assert!(cap_after < cap_before, "Capacity did not shrink: before={}, after={}", cap_before, cap_after);
+        assert_eq!(range.ranges.len(), 1);
+        Ok(())
+    }
+
+    #[test]
+    fn test_auto_resize_merge_previous() -> Result<(), Error<i32>> {
+        let mut range = MultiRange::default();
+        range.insert(1)?; // [1, 2)
+        range.insert(3)?; // [3, 4)
+        
+        // Force capacity
+        range.ranges.reserve(10000);
+        let cap_before = range.ranges.capacity();
+
+        // Insert 2.
+        // ranges[1] ([3, 4)) expands to left -> [2, 4).
+        // Then merges with ranges[0] ([1, 2)).
+        // ranges[1] is removed.
+        range.insert(2)?;
+
+        let cap_after = range.ranges.capacity();
+        assert!(cap_after < cap_before, "Capacity did not shrink: before={}, after={}", cap_before, cap_after);
+        assert_eq!(range.ranges.len(), 1);
+        assert!(range.contains(1));
+        assert!(range.contains(2));
+        assert!(range.contains(3));
         Ok(())
     }
 }

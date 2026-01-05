@@ -7,6 +7,7 @@ use crate::{MultiRanged, Step, errors::Error};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "mem_dbg", derive(mem_dbg::MemSize, mem_dbg::MemDbg))]
 /// A struct representing a range which may be split into two parts.
 ///
 /// # Examples
