@@ -8,6 +8,6 @@ fn test_multi_range_creation() {
     range.insert(-2).unwrap();
 
     assert_eq!(range.absolute_start(), Some(-3), "Range: {range:?}");
-    assert_eq!(range.absolute_end(), Some(8), "Range: {range:?}");
+    assert_eq!(range.absolute_end(), Some(7), "Range: {range:?}");
     assert!(range.is_dense());
 }

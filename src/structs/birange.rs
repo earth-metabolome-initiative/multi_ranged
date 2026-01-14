@@ -42,23 +42,13 @@ impl<N: Step> MultiRanged for BiRange<N> {
                             if out_of_range_element
                                 < range.absolute_start().expect("Range must have a start")
                             {
-                                *self = Self::Double(
-                                    SimpleRange::try_from((
-                                        out_of_range_element,
-                                        out_of_range_element + Self::Step::ONE,
-                                    ))?,
-                                    *range,
-                                );
+                                *self =
+                                    Self::Double(SimpleRange::from(out_of_range_element), *range);
                             } else if out_of_range_element
-                                >= range.absolute_end().expect("Range must have an end")
+                                > range.absolute_end().expect("Range must have an end")
                             {
-                                *self = Self::Double(
-                                    *range,
-                                    SimpleRange::try_from((
-                                        out_of_range_element,
-                                        out_of_range_element + Self::Step::ONE,
-                                    ))?,
-                                );
+                                *self =
+                                    Self::Double(*range, SimpleRange::from(out_of_range_element));
                             }
                             Ok(())
                         }
@@ -73,7 +63,9 @@ impl<N: Step> MultiRanged for BiRange<N> {
             }
             Self::Double(left, right) => {
                 left.insert(element).or_else(|_| right.insert(element))?;
-                if left.absolute_end() == right.absolute_start() {
+                if left.absolute_end().unwrap().saturating_add(&N::ONE)
+                    >= right.absolute_start().unwrap()
+                {
                     *self = Self::try_from((
                         left.absolute_start().expect("Range must have a start"),
                         right.absolute_end().expect("Range must have an end"),
@@ -96,7 +88,9 @@ impl<N: Step> MultiRanged for BiRange<N> {
             Self::Double(left, right) => {
                 let outcome = left.merge(other);
                 if outcome.is_ok() || right.merge(other).is_ok() {
-                    if left.absolute_end() == right.absolute_start() {
+                    if left.absolute_end().unwrap().saturating_add(&N::ONE)
+                        >= right.absolute_start().unwrap()
+                    {
                         *self = Self::try_from((
                             left.absolute_start().expect("Range must have a start"),
                             right.absolute_end().expect("Range must have an end"),
@@ -300,12 +294,12 @@ mod tests {
         assert!(matches!(err, Error::DuplicateElement(5)));
 
         // Test merging Double back to Single
-        let mut range = BiRange::try_from((1, 3))?; // [1, 2]
-        range.insert(4)?; // [1, 2] and [4, 5]
-        range.insert(3)?; // [1, 2, 3, 4, 5] -> [1, 6)
+        let mut range = BiRange::try_from((1, 2))?; // [1, 2]
+        range.insert(4)?; // [1, 2] and [4, 4]
+        range.insert(3)?; // [3, 4] -> merges with [1, 2] -> [1, 4]
         assert!(range.is_dense());
         assert_eq!(range.absolute_start(), Some(1));
-        assert_eq!(range.absolute_end(), Some(5));
+        assert_eq!(range.absolute_end(), Some(4));
 
         // Test insert failure in Double range
         let mut range_double_fail = BiRange::from(1);
@@ -352,12 +346,12 @@ mod tests {
     fn test_absolute_start_end() -> Result<(), Error<i32>> {
         let range = BiRange::from(5);
         assert_eq!(range.absolute_start(), Some(5));
-        assert_eq!(range.absolute_end(), Some(6));
+        assert_eq!(range.absolute_end(), Some(5));
 
         let mut range_double = BiRange::from(1);
         range_double.insert(10)?;
         assert_eq!(range_double.absolute_start(), Some(1));
-        assert_eq!(range_double.absolute_end(), Some(11));
+        assert_eq!(range_double.absolute_end(), Some(10));
         Ok(())
     }
 
@@ -396,6 +390,7 @@ mod tests {
         let mut range = BiRange::try_from((1, 3))?;
         assert_eq!(range.next(), Some(1));
         assert_eq!(range.next(), Some(2));
+        assert_eq!(range.next(), Some(3));
         assert_eq!(range.next(), None);
 
         let mut range_double = BiRange::from(1);
@@ -409,6 +404,7 @@ mod tests {
     #[test]
     fn test_double_ended_iterator() -> Result<(), Error<i32>> {
         let mut range = BiRange::try_from((1, 3))?;
+        assert_eq!(range.next_back(), Some(3));
         assert_eq!(range.next_back(), Some(2));
         assert_eq!(range.next_back(), Some(1));
         assert_eq!(range.next_back(), None);
@@ -424,7 +420,7 @@ mod tests {
     #[test]
     fn test_len() -> Result<(), Error<i32>> {
         let range = BiRange::try_from((1, 4))?;
-        assert_eq!(range.len(), 3);
+        assert_eq!(range.len(), 4);
 
         let mut range_double = BiRange::from(1);
         range_double.insert(3)?;
@@ -437,7 +433,7 @@ mod tests {
         let simple = SimpleRange::try_from((1, 3))?;
         let bi: BiRange<i32> = BiRange::from(simple);
         assert!(bi.is_dense());
-        assert_eq!(bi.len(), 2);
+        assert_eq!(bi.len(), 3);
         Ok(())
     }
 
@@ -446,7 +442,7 @@ mod tests {
         let range = BiRange::try_from((1, 3))?;
         assert!(range.contains(1));
         assert!(range.contains(2));
-        assert!(!range.contains(3));
+        assert!(range.contains(3));
         Ok(())
     }
 
@@ -489,8 +485,8 @@ mod tests {
         let mut range_double = BiRange::from(1);
         range_double.insert(3)?;
         let scaled_double = range_double * 2;
-        // [1, 2) -> [2, 3) (contains 2)
-        // [3, 4) -> [6, 7) (contains 6)
+        // [1, 1] -> [2, 2]
+        // [3, 3] -> [6, 6]
         assert!(scaled_double.contains(2));
         assert!(scaled_double.contains(6));
         Ok(())
@@ -523,7 +519,7 @@ mod tests {
 
     #[test]
     fn test_insert_gap() -> Result<(), Error<i32>> {
-        // [1, 2) and [3, 4)
+        // [1, 1] and [3, 3]
         let mut range = BiRange::from(1);
         range.insert(3)?;
         assert!(!range.is_dense());
@@ -540,13 +536,13 @@ mod tests {
 
     #[test]
     fn test_merge_gap() -> Result<(), Error<i32>> {
-        // [1, 2) and [4, 5)
+        // [1, 1] and [4, 4]
         let mut range = BiRange::from(1);
         range.insert(4)?;
         assert!(!range.is_dense());
 
-        // Merge [2, 4) to bridge the gap
-        let middle = SimpleRange::try_from((2, 4))?;
+        // Merge [2, 3] to bridge the gap
+        let middle = SimpleRange::try_from((2, 3))?;
         range.merge(&middle)?;
 
         assert!(range.is_dense());

@@ -42,11 +42,17 @@ impl<N: Step> MultiRanged for MultiRange<N> {
         }
 
         match self.ranges.binary_search_by(|probe| {
-            let absolute_start = probe.absolute_start().expect("Range must have a start").prev();
+            let absolute_start = probe.absolute_start().expect("Range must have a start");
             let absolute_end = probe.absolute_end().expect("Range must have an end");
-            if element < absolute_start {
+
+            // Use saturating arithmetic for proximity check.
+            // If element is adjacent to the range, we consider it "Equal" (found).
+            let match_start = absolute_start.prev();
+            let match_end = absolute_end.next();
+
+            if element < match_start {
                 std::cmp::Ordering::Greater
-            } else if element > absolute_end {
+            } else if element > match_end {
                 std::cmp::Ordering::Less
             } else {
                 std::cmp::Ordering::Equal
@@ -57,7 +63,9 @@ impl<N: Step> MultiRanged for MultiRange<N> {
 
                 // We check whether inserting this element has now merged two ranges.
                 if index > 0
-                    && self.ranges[index - 1].absolute_end() == self.ranges[index].absolute_start()
+                    // Check if previous range ends where current starts (or overlaps/adjacent)
+                    // Inclusive end: prev.end + 1 >= curr.start
+                    && self.ranges[index - 1].absolute_end().unwrap().saturating_add(&N::ONE) >= self.ranges[index].absolute_start().unwrap()
                 {
                     // Merge with the previous range.
                     let was_last = index == self.ranges.len() - 1;
@@ -71,7 +79,8 @@ impl<N: Step> MultiRanged for MultiRange<N> {
                     index -= 1; // Adjust index after removal.
                 }
                 if index < self.ranges.len() - 1
-                    && self.ranges[index + 1].absolute_start() == self.ranges[index].absolute_end()
+                    // Check if current range ends where next starts
+                    && self.ranges[index].absolute_end().unwrap().saturating_add(&N::ONE) >= self.ranges[index + 1].absolute_start().unwrap()
                 {
                     // Merge with the next range.
                     let was_last = index + 1 == self.ranges.len() - 1;
@@ -311,17 +320,16 @@ mod tests {
         assert_eq!(range.len(), 3);
 
         // Insert to merge
-        range.insert(2)?; // Merges 1 and 3 -> [1, 2, 3] (which is [1, 4))
-        assert!(range.contains(2));
-        // Check if merged: [1, 4), [5, 6)
-        // 1, 2, 3 are in first range. 5 is in second.
+        range.insert(2)?; // Merges [1, 1] and [3, 3] -> [1, 3]
+        assert!(!range.contains(4)); // Not yet inserted
+        range.insert(4)?; // Merges [1, 3] and [5, 5] -> [1, 5]
 
-        range.insert(4)?; // Merges [1, 4) and [5, 6) -> [1, 6)
+        assert!(range.contains(2));
         assert!(range.contains(4));
         assert!(range.is_dense());
         assert_eq!(range.len(), 5);
         assert_eq!(range.absolute_start(), Some(1));
-        assert_eq!(range.absolute_end(), Some(6));
+        assert_eq!(range.absolute_end(), Some(5));
 
         // Test inserting disjoint ranges explicitly to cover binary_search Err branches
         let mut range_disjoint = MultiRange::default();
@@ -353,15 +361,15 @@ mod tests {
 
         range.insert(5)?;
         assert_eq!(range.absolute_start(), Some(5));
-        assert_eq!(range.absolute_end(), Some(6));
+        assert_eq!(range.absolute_end(), Some(5));
 
         range.insert(1)?;
         assert_eq!(range.absolute_start(), Some(1));
-        assert_eq!(range.absolute_end(), Some(6));
+        assert_eq!(range.absolute_end(), Some(5));
 
         range.insert(10)?;
         assert_eq!(range.absolute_start(), Some(1));
-        assert_eq!(range.absolute_end(), Some(11));
+        assert_eq!(range.absolute_end(), Some(10));
         Ok(())
     }
 
@@ -379,8 +387,6 @@ mod tests {
     #[test]
     fn test_is_dense() -> Result<(), Error<i32>> {
         let mut range = MultiRange::default();
-        // Empty range is not dense? Implementation: ranges.len() == 1.
-        // If empty, len is 0. So false.
         assert!(!range.is_dense());
 
         range.insert(1)?;
@@ -432,7 +438,7 @@ mod tests {
     fn test_from_simple_range() -> Result<(), Error<i32>> {
         let simple = SimpleRange::try_from((1, 3))?;
         let multi = MultiRange::from(simple);
-        assert_eq!(multi.len(), 2);
+        assert_eq!(multi.len(), 3);
         assert!(multi.is_dense());
 
         let empty_simple: SimpleRange<i32> = SimpleRange::default();
@@ -446,6 +452,7 @@ mod tests {
         let range = MultiRange::try_from((1, 3))?;
         assert!(range.contains(1));
         assert!(range.contains(2));
+        assert!(range.contains(3));
         Ok(())
     }
 
@@ -493,8 +500,8 @@ mod tests {
         range.insert(1)?;
         range.insert(3)?;
         let scaled = range * 2;
-        // 1 -> [2, 3) (contains 2)
-        // 3 -> [6, 7) (contains 6)
+        // 1 -> [2, 2]
+        // 3 -> [6, 6]
         assert!(scaled.contains(2));
         assert!(scaled.contains(6));
         assert!(!scaled.contains(4));
@@ -536,14 +543,12 @@ mod tests {
     #[test]
     fn test_insert_merge_next() -> Result<(), Error<i32>> {
         let mut range = MultiRange::default();
-        // [1, 2)
-        range.insert(1)?;
-        // [3, 4)
-        range.insert(3)?;
+        range.insert(1)?; // [1, 1]
+        range.insert(3)?; // [3, 3]
 
         assert_eq!(range.ranges.len(), 2);
 
-        // Insert 2, which should merge [1, 2) and [3, 4) into [1, 4)
+        // Insert 2, which should merge [1, 1] and [3, 3] into [1, 3]
         range.insert(2)?;
 
         assert_eq!(range.ranges.len(), 1);
@@ -551,18 +556,21 @@ mod tests {
         assert!(range.contains(2));
         assert!(range.contains(3));
         assert_eq!(range.absolute_start(), Some(1));
-        assert_eq!(range.absolute_end(), Some(4));
+        assert_eq!(range.absolute_end(), Some(3));
         Ok(())
     }
 
     #[test]
     fn test_insert_merge_next_middle() -> Result<(), Error<i32>> {
         let mut range = MultiRange::default();
-        range.insert(1)?; // [1, 2)
-        range.insert(3)?; // [3, 4)
-        range.insert(5)?; // [5, 6)
+        range.insert(1)?; // [1, 1]
+        range.insert(3)?; // [3, 3]
+        range.insert(5)?; // [5, 5]
 
-        range.insert(4)?;
+        range.insert(4)?; // Merges [3,3] and [4,4] -> [3,4]. [5,5] remains separate?
+        // Wait, [3,4] end=4. [5,5] start=5. Adjacent! Merge occurs.
+        // The check uses index+1.
+        // Yes, MultiRange implementation should merge adjacent ranges.
 
         assert_eq!(range.ranges.len(), 2);
         assert!(range.contains(1));
@@ -570,8 +578,8 @@ mod tests {
         assert!(range.contains(4));
         assert!(range.contains(5));
 
-        // ranges[0] is [1, 2)
-        // ranges[1] is [3, 6)
+        // ranges[0] is [1, 1]
+        // ranges[1] is [3, 5]
         assert!(!range.contains(2));
 
         Ok(())
@@ -582,7 +590,7 @@ mod tests {
         let mut range = MultiRange::default();
         // Insert enough ranges to grow capacity
         for i in 0..10 {
-            range.insert(i * 2)?; // [0, 1), [2, 3), ...
+            range.insert(i * 2)?; // [0, 0], [2, 2], ...
         }
 
         // Consume all ranges from back
@@ -596,14 +604,14 @@ mod tests {
     #[test]
     fn test_auto_resize_merge_last() -> Result<(), Error<i32>> {
         let mut range = MultiRange::default();
-        range.insert(1)?;
-        range.insert(3)?;
+        range.insert(1)?; // [1, 1]
+        range.insert(3)?; // [3, 3]
         // Force capacity to be larger
         range.ranges.reserve(10000);
         let cap_before = range.ranges.capacity();
 
-        // Insert 2 to merge [1, 2) and [3, 4) -> [1, 4)
-        // This removes the last range.
+        // Insert 2 to merge [1, 1] and [3, 3] -> [1, 3]
+        // This removes the last range (index 1), merging into index 0.
         range.insert(2)?;
 
         let cap_after = range.ranges.capacity();
@@ -621,17 +629,14 @@ mod tests {
     #[test]
     fn test_auto_resize_merge_previous() -> Result<(), Error<i32>> {
         let mut range = MultiRange::default();
-        range.insert(1)?; // [1, 2)
-        range.insert(3)?; // [3, 4)
+        range.insert(1)?; // [1, 1]
+        range.insert(3)?; // [3, 3]
 
         // Force capacity
         range.ranges.reserve(10000);
         let cap_before = range.ranges.capacity();
 
         // Insert 2.
-        // ranges[1] ([3, 4)) expands to left -> [2, 4).
-        // Then merges with ranges[0] ([1, 2)).
-        // ranges[1] is removed.
         range.insert(2)?;
 
         let cap_after = range.ranges.capacity();

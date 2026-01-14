@@ -18,15 +18,15 @@ A contiguous range from start to end. See [`SimpleRange`](https://docs.rs/multi_
 ```rust
 use multi_ranged::{SimpleRange, MultiRanged};
 
-// Create a range [0, 10)
+// Create a range [0, 10]
 let mut range = SimpleRange::try_from((0, 10))?;
-assert_eq!(range.len(), 10);
+assert_eq!(range.len(), 11);
 assert!(range.contains(5));
 assert!(!range.contains(15));
 
-// Extend the range to [0, 11)
-range.insert(10)?;
-assert_eq!(range.len(), 11);
+// Extend the range to [0, 11]
+range.insert(11)?;
+assert_eq!(range.len(), 12);
 # Ok::<(), multi_ranged::errors::Error<i32>>(())
 ```
 
@@ -38,18 +38,18 @@ A range that can be split into at most two non-contiguous parts. See [`BiRange`]
 use multi_ranged::{BiRange, MultiRanged};
 
 // Create a BiRange from a slice of integers.
-// This creates two disjoint ranges: [1, 3) and [5, 7).
+// This creates two disjoint ranges: [1, 2] and [5, 6].
 let mut range = BiRange::try_from([1, 2, 5, 6])?;
 assert!(!range.is_dense());
 assert_eq!(range.len(), 4);
 
 // Insert a value that bridges the gap.
-range.insert(3)?; // Now we have [1, 4) and [5, 7)
-range.insert(4)?; // Now we have [1, 7)
+range.insert(3)?; // Now we have [1, 3] and [5, 6]
+range.insert(4)?; // Now we have [1, 6]
 
 assert!(range.is_dense());
 assert_eq!(range.absolute_start(), Some(1));
-assert_eq!(range.absolute_end(), Some(7));
+assert_eq!(range.absolute_end(), Some(6));
 # Ok::<(), multi_ranged::errors::Error<i32>>(())
 ```
 
@@ -61,22 +61,22 @@ Multiple disjoint ranges that can be built incrementally. See [`MultiRange`](htt
 use multi_ranged::{MultiRange, MultiRanged};
 
 // Create a MultiRange from a slice of integers.
-// This creates two disjoint ranges: [1, 4) and [10, 13).
+// This creates two disjoint ranges: [1, 3] and [10, 12].
 let mut range = MultiRange::try_from([1, 2, 3, 10, 11, 12])?;
 assert!(!range.is_dense());
 
-// Insert values that bridge the gap between [1, 4) and [10, 13).
-range.insert(4)?; // Now we have [1, 5) and [10, 13)
-range.insert(5)?; // Now we have [1, 6) and [10, 13)
-range.insert(6)?; // Now we have [1, 7) and [10, 13)
-range.insert(7)?; // Now we have [1, 8) and [10, 13)
-range.insert(8)?; // Now we have [1, 9) and [10, 13)
-range.insert(9)?; // Now we have [1, 13)
+// Insert values that bridge the gap between [1, 3] and [10, 12].
+range.insert(4)?; // Now we have [1, 4] and [10, 12]
+range.insert(5)?; // Now we have [1, 5] and [10, 12]
+range.insert(6)?; // Now we have [1, 6] and [10, 12]
+range.insert(7)?; // Now we have [1, 7] and [10, 12]
+range.insert(8)?; // Now we have [1, 8] and [10, 12]
+range.insert(9)?; // Now we have [1, 12]
 
-// The ranges have merged into a single contiguous range: [1, 13).
+// The ranges have merged into a single contiguous range: [1, 12].
 assert!(range.is_dense());
 assert_eq!(range.absolute_start(), Some(1));
-assert_eq!(range.absolute_end(), Some(13));
+assert_eq!(range.absolute_end(), Some(12));
 # Ok::<(), multi_ranged::errors::Error<i32>>(())
 ```
 

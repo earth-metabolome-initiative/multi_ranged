@@ -4,7 +4,7 @@ use std::ops::{Mul, MulAssign};
 
 use crate::{MultiRanged, Step, errors::Error};
 
-/// A contiguous range from start to end (exclusive).
+/// A contiguous range from start to end (inclusive).
 ///
 /// # Examples
 ///
@@ -30,21 +30,21 @@ where
     type Step = N;
 
     fn insert(&mut self, element: Self::Step) -> Result<(), Error<N>> {
-        if element >= self.start && element < self.end {
+        if self.contains(element) {
             return Err(Error::DuplicateElement(element));
         }
 
         // If the range is currently completely empty,
         // we need to set the start and end relative to the element.
-        if self.start == self.end {
+        if self.start > self.end {
             self.start = element;
-            self.end = element + N::ONE;
+            self.end = element;
             Ok(())
-        } else if element + N::ONE == self.start {
+        } else if element < self.start && element.next() == self.start {
             self.start = element;
             Ok(())
-        } else if element == self.end {
-            self.end = element + N::ONE;
+        } else if element > self.end && self.end.next() == element {
+            self.end = element;
             Ok(())
         } else {
             Err(Error::OutOfRange(element))
@@ -67,30 +67,45 @@ where
             return Ok(());
         }
 
-        if (Some(self.start) <= other.absolute_start() && Some(self.end) >= other.absolute_start())
-            || (other.absolute_start() <= Some(self.start)
-                && other.absolute_end() >= Some(self.start))
-        {
-            self.start = other.absolute_start().unwrap().min(self.start);
-            self.end = other.absolute_end().unwrap().max(self.end);
+        let other_start = other.absolute_start().unwrap();
+        let other_end = other.absolute_end().unwrap();
+
+        // Check if overlapping or adjacent (inclusive)
+        // Connected if max(starts) <= min(ends) + 1 if we consider adjacency.
+        // Or simply:
+        // Overlap: s1 <= e2 && s2 <= e1
+        // Adjacent: e1+1 == s2 || e2+1 == s1
+        // Combined: s1 <= e2+1 && s2 <= e1+1
+
+        let s1 = self.start;
+        let e1 = self.end;
+        let s2 = other_start;
+        let e2 = other_end;
+
+        // Use saturating add for checking adjacency
+        let connected = (s1 <= e2.saturating_add(&N::ONE)) && (s2 <= e1.saturating_add(&N::ONE));
+
+        if connected {
+            self.start = s1.min(s2);
+            self.end = e1.max(e2);
             Ok(())
         } else {
-            Err(Error::OutOfRange(other.absolute_start().unwrap()))
+            Err(Error::OutOfRange(other_start))
         }
     }
 
     #[inline]
     fn absolute_start(&self) -> Option<Self::Step> {
-        if self.start < self.end { Some(self.start) } else { None }
+        if self.start <= self.end { Some(self.start) } else { None }
     }
 
     #[inline]
     fn absolute_end(&self) -> Option<Self::Step> {
-        if self.start < self.end { Some(self.end) } else { None }
+        if self.start <= self.end { Some(self.end) } else { None }
     }
 
     fn contains(&self, element: Self::Step) -> bool {
-        element >= self.start && element < self.end && self.start < self.end
+        element >= self.start && element <= self.end && self.start <= self.end
     }
 
     fn is_dense(&self) -> bool {
@@ -101,7 +116,8 @@ where
 impl<N: Step> Default for SimpleRange<N> {
     #[inline]
     fn default() -> Self {
-        Self { start: N::ZERO, end: N::ZERO }
+        // Empty state: start > end
+        Self { start: N::ONE, end: N::ZERO }
     }
 }
 
@@ -110,9 +126,15 @@ impl<N: Step> Iterator for SimpleRange<N> {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        if self.start < self.end {
+        if self.start <= self.end {
             let current = self.start;
-            self.start = self.start.next();
+            if self.start == self.end {
+                // Determine it becomes empty
+                self.start = N::ONE;
+                self.end = N::ZERO;
+            } else {
+                self.start = self.start.next();
+            }
             Some(current)
         } else {
             None
@@ -123,9 +145,15 @@ impl<N: Step> Iterator for SimpleRange<N> {
 impl<N: Step> DoubleEndedIterator for SimpleRange<N> {
     #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
-        if self.start < self.end {
-            self.end = self.end.prev();
-            Some(self.end)
+        if self.start <= self.end {
+            let current = self.end;
+            if self.start == self.end {
+                self.start = N::ONE;
+                self.end = N::ZERO;
+            } else {
+                self.end = self.end.prev();
+            }
+            Some(current)
         } else {
             None
         }
@@ -135,7 +163,14 @@ impl<N: Step> DoubleEndedIterator for SimpleRange<N> {
 impl<N: Step> ExactSizeIterator for SimpleRange<N> {
     #[inline]
     fn len(&self) -> usize {
-        (self.end - self.start).to_usize().expect("Step type should implement ToPrimitive")
+        if self.start > self.end {
+            0
+        } else {
+            (self.end - self.start)
+                .to_usize()
+                .map(|x| x + 1)
+                .expect("Step type should implement ToPrimitive")
+        }
     }
 }
 
@@ -158,7 +193,7 @@ impl<N: Step> TryFrom<&[N]> for SimpleRange<N> {
             Ok(())
         })?;
         let start = slice[0];
-        let end = slice[slice.len() - 1] + N::ONE;
+        let end = slice[slice.len() - 1];
         SimpleRange::try_from((start, end))
     }
 }
@@ -174,7 +209,7 @@ impl<N: Step> TryFrom<Vec<N>> for SimpleRange<N> {
 impl<N: Step> From<N> for SimpleRange<N> {
     #[inline]
     fn from(element: N) -> Self {
-        Self { start: element, end: element.next() }
+        Self { start: element, end: element }
     }
 }
 
@@ -183,7 +218,7 @@ impl<N: Step> Mul<N> for SimpleRange<N> {
 
     #[inline]
     fn mul(self, rhs: N) -> Self::Output {
-        Self { start: self.start * rhs, end: ((self.end.prev()) * rhs).next() }
+        Self { start: self.start * rhs, end: self.end * rhs }
     }
 }
 
@@ -191,7 +226,7 @@ impl<N: Step> MulAssign<N> for SimpleRange<N> {
     #[inline]
     fn mul_assign(&mut self, rhs: N) {
         self.start *= rhs;
-        self.end = (self.end.prev() * rhs).next();
+        self.end *= rhs;
     }
 }
 
@@ -208,13 +243,13 @@ impl<N: Step> SimpleRange<N> {
     /// let range = SimpleRange::try_from((1, 3))?;
     /// let scaled = range.checked_mul(2).ok_or("overflow")?;
     /// assert_eq!(scaled.absolute_start(), Some(2));
-    /// assert_eq!(scaled.absolute_end(), Some(5));
+    /// assert_eq!(scaled.absolute_end(), Some(6));
     /// # Ok(())
     /// # }
     /// ```
     pub fn checked_mul(&self, factor: N) -> Option<Self> {
         let start = self.start.checked_mul(&factor)?;
-        let end = self.end.prev().checked_mul(&factor)?.next();
+        let end = self.end.checked_mul(&factor)?;
         Some(Self { start, end })
     }
 }
@@ -282,24 +317,30 @@ mod tests {
         assert_eq!(range1.len(), 3);
 
         // Merge overlapping
-        let range4 = SimpleRange::try_from((5, 7))?; // [5, 6]
+        let range4 = SimpleRange::try_from((5, 7))?; // [5, 7] inclusive
         range1.merge(&range4)?;
-        assert_eq!(range1.len(), 3); // Should be same [4, 5, 6]
+        assert_eq!(range1.len(), 4); // 4, 5, 6, 7 (4 from range1, 5,6 overlap, 7 from range4)
+        assert!(range1.contains(7));
 
         // Merge disjoint
         let range5 = SimpleRange::from(10);
         let err = range1.merge(&range5).unwrap_err();
         assert!(matches!(err, Error::OutOfRange(10)));
 
+        // Merge adjacent
+        let range_adj = SimpleRange::from(8);
+        range1.merge(&range_adj)?;
+        assert_eq!(range1.len(), 5);
+
         // Merge empty
         let range_empty = SimpleRange::default();
         range1.merge(&range_empty)?;
-        assert_eq!(range1.len(), 3);
+        assert_eq!(range1.len(), 5);
 
         // Merge into empty
         let mut range_empty_dest = SimpleRange::default();
         range_empty_dest.merge(&range1)?;
-        assert_eq!(range_empty_dest.len(), 3);
+        assert_eq!(range_empty_dest.len(), 5);
         assert!(range_empty_dest.contains(4));
 
         Ok(())
@@ -332,11 +373,12 @@ mod tests {
 
     #[test]
     fn test_contains() -> Result<(), Error<i32>> {
-        let range = SimpleRange::try_from((1, 4))?;
+        let range = SimpleRange::try_from((1, 4))?; // [1, 4]
         assert!(range.contains(1));
         assert!(range.contains(2));
         assert!(range.contains(3));
-        assert!(!range.contains(4));
+        assert!(range.contains(4));
+        assert!(!range.contains(5));
         assert!(!range.contains(0));
         Ok(())
     }
@@ -356,28 +398,32 @@ mod tests {
 
     #[test]
     fn test_iterator() -> Result<(), Error<i32>> {
-        let mut range = SimpleRange::try_from((1, 4))?;
+        let mut range = SimpleRange::try_from((1, 3))?; // [1, 3] -> 1, 2, 3
         assert_eq!(range.next(), Some(1));
         assert_eq!(range.next(), Some(2));
         assert_eq!(range.next(), Some(3));
+        assert_eq!(range.next(), None);
+        // Ensure empty state remains empty
         assert_eq!(range.next(), None);
         Ok(())
     }
 
     #[test]
     fn test_double_ended_iterator() -> Result<(), Error<i32>> {
-        let mut range = SimpleRange::try_from((1, 4))?;
+        let mut range = SimpleRange::try_from((1, 3))?; // [1, 3] -> 1, 2, 3
         assert_eq!(range.next_back(), Some(3));
         assert_eq!(range.next_back(), Some(2));
         assert_eq!(range.next_back(), Some(1));
+        assert_eq!(range.next_back(), None);
+        // Ensure empty state remains empty
         assert_eq!(range.next_back(), None);
         Ok(())
     }
 
     #[test]
     fn test_len() -> Result<(), Error<i32>> {
-        let range = SimpleRange::try_from((1, 4))?;
-        assert_eq!(range.len(), 3);
+        let range = SimpleRange::try_from((1, 4))?; // [1, 4]
+        assert_eq!(range.len(), 4);
         Ok(())
     }
 
@@ -398,31 +444,15 @@ mod tests {
         let range = SimpleRange::try_from(&slice[..])?;
         assert_eq!(range.len(), 3);
         assert_eq!(range.absolute_start(), Some(1));
+        assert_eq!(range.absolute_end(), Some(3));
 
         let slice_unsorted = [1, 3, 2];
         let err = SimpleRange::try_from(&slice_unsorted[..]).unwrap_err();
-        assert!(matches!(err, Error::NotSorted(3))); // 1 < 3 ok, 3 > 2 error? Wait, implementation checks window[0] >= window[1]. 1<3 ok. 3>=2 error. Error::NotSorted(3).
+        assert!(matches!(err, Error::NotSorted(3)));
 
         let slice_gap = [1, 3];
-        // Implementation: slice.windows(2).try_for_each... checks sorted.
-        // Then start = slice[0], end = slice[last] + 1.
-        // So [1, 3] -> start=1, end=4. Range [1, 4) -> 1, 2, 3.
-        // But input was [1, 3]. So it assumes contiguous input if sorted?
-        // The implementation of TryFrom<&[N]> for SimpleRange seems to assume the slice
-        // represents the bounds or the elements? "A contiguous range from start
-        // to end (exclusive)." TryFrom<&[N]>:
-        // slice.windows(2)... check sorted.
-        // start = slice[0]
-        // end = slice[last] + 1
-        // SimpleRange::try_from((start, end))
-        // If I pass [1, 3], it creates range [1, 4) which contains 2.
-        // This seems to imply the slice is expected to be contiguous elements if it's
-        // to represent the range accurately, OR it just takes min and max.
-        // But SimpleRange is contiguous. If the slice has gaps, SimpleRange will fill
-        // them. The implementation doesn't check for gaps (step size).
-        // Let's verify this behavior with a test case, but maybe not assert it's
-        // "correct" if it's ambiguous, just assert what it does.
         let range_gap = SimpleRange::try_from(&slice_gap[..])?;
+        // [1, 3] inclusive -> 1, 2, 3.
         assert!(range_gap.contains(2));
 
         Ok(())
@@ -445,11 +475,11 @@ mod tests {
 
     #[test]
     fn test_mul() -> Result<(), Error<i32>> {
-        let range = SimpleRange::try_from((1, 3))?; // [1, 2]
+        let range = SimpleRange::try_from((1, 2))?; // [1, 2]
         let scaled = range * 2;
         // start = 1*2 = 2
-        // end = (3.prev()*2).next() = (2*2).next() = 4.next() = 5.
-        // [2, 5) -> 2, 3, 4.
+        // end = 2*2 = 4
+        // [2, 4] -> 2, 3, 4
         assert!(scaled.contains(2));
         assert!(scaled.contains(3));
         assert!(scaled.contains(4));
@@ -459,7 +489,7 @@ mod tests {
 
     #[test]
     fn test_mul_assign() -> Result<(), Error<i32>> {
-        let mut range = SimpleRange::try_from((1, 3))?;
+        let mut range = SimpleRange::try_from((1, 2))?;
         range *= 2;
         assert!(range.contains(2));
         assert!(range.contains(4));
@@ -468,7 +498,7 @@ mod tests {
 
     #[test]
     fn test_checked_mul() -> Result<(), Error<i32>> {
-        let range = SimpleRange::try_from((1, 3))?;
+        let range = SimpleRange::try_from((1, 2))?;
         let scaled = range.checked_mul(2).unwrap();
         assert!(scaled.contains(2));
         assert!(scaled.contains(4));
@@ -491,7 +521,7 @@ mod tests {
     fn test_into_vec() -> Result<(), Error<i32>> {
         let range = SimpleRange::try_from((1, 4))?;
         let vec: Vec<i32> = range.into();
-        assert_eq!(vec, vec![1, 2, 3]);
+        assert_eq!(vec, vec![1, 2, 3, 4]);
         Ok(())
     }
 }

@@ -93,7 +93,7 @@ pub trait MultiRanged:
     /// ```
     /// use multi_ranged::{MultiRanged, SimpleRange};
     /// let range = SimpleRange::from(5);
-    /// assert_eq!(range.absolute_end(), Some(6));
+    /// assert_eq!(range.absolute_end(), Some(5));
     /// ```
     fn absolute_end(&self) -> Option<Self::Step>;
 
