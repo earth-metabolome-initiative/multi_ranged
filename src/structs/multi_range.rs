@@ -1,6 +1,9 @@
 //! Multiple disjoint ranges implementation.
 
-use std::ops::{BitOr, BitOrAssign, Mul, MulAssign};
+use std::{
+    collections::VecDeque,
+    ops::{BitOr, BitOrAssign, Mul, MulAssign},
+};
 
 use super::SimpleRange;
 use crate::{MultiRanged, Step, errors::Error};
@@ -24,10 +27,9 @@ use crate::{MultiRanged, Step, errors::Error};
 /// ```
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "mem_dbg", derive(mem_dbg::MemSize, mem_dbg::MemDbg))]
 pub struct MultiRange<N> {
-    /// A vector of `SimpleRange` instances.
-    ranges: Vec<SimpleRange<N>>,
+    /// A deque of `SimpleRange` instances.
+    ranges: VecDeque<SimpleRange<N>>,
 }
 
 impl<N: Step> MultiRanged for MultiRange<N> {
@@ -37,7 +39,7 @@ impl<N: Step> MultiRanged for MultiRange<N> {
     fn insert(&mut self, element: Self::Step) -> Result<(), Error<N>> {
         if self.ranges.is_empty() {
             // If there are no ranges, create a new one with the element.
-            self.ranges.push(SimpleRange::from(element));
+            self.ranges.push_back(SimpleRange::from(element));
             return Ok(());
         }
 
@@ -68,14 +70,10 @@ impl<N: Step> MultiRanged for MultiRange<N> {
                     && self.ranges[index - 1].absolute_end().unwrap().saturating_add(&N::ONE) >= self.ranges[index].absolute_start().unwrap()
                 {
                     // Merge with the previous range.
-                    let was_last = index == self.ranges.len() - 1;
-                    let merged_range = self.ranges.remove(index);
+                    let merged_range = self.ranges.remove(index).expect("Index must exist");
                     self.ranges[index - 1]
                         .merge(&merged_range)
                         .expect("Ranges are adjacent, merge should succeed");
-                    if was_last {
-                        self.ranges.shrink_to_fit();
-                    }
                     index -= 1; // Adjust index after removal.
                 }
                 if index < self.ranges.len() - 1
@@ -83,14 +81,10 @@ impl<N: Step> MultiRanged for MultiRange<N> {
                     && self.ranges[index].absolute_end().unwrap().saturating_add(&N::ONE) >= self.ranges[index + 1].absolute_start().unwrap()
                 {
                     // Merge with the next range.
-                    let was_last = index + 1 == self.ranges.len() - 1;
-                    let merged_range = self.ranges.remove(index + 1);
+                    let merged_range = self.ranges.remove(index + 1).expect("Index must exist");
                     self.ranges[index]
                         .merge(&merged_range)
                         .expect("Ranges are adjacent, merge should succeed");
-                    if was_last {
-                        self.ranges.shrink_to_fit();
-                    }
                 }
             }
             Err(index) => {
@@ -98,6 +92,7 @@ impl<N: Step> MultiRanged for MultiRange<N> {
             }
         }
 
+        self.ranges.shrink_to_fit();
         Ok(())
     }
 
@@ -114,17 +109,30 @@ impl<N: Step> MultiRanged for MultiRange<N> {
 
     #[inline]
     fn absolute_start(&self) -> Option<Self::Step> {
-        self.ranges.first().and_then(MultiRanged::absolute_start)
+        self.ranges.front().and_then(MultiRanged::absolute_start)
     }
 
     #[inline]
     fn absolute_end(&self) -> Option<Self::Step> {
-        self.ranges.last().and_then(MultiRanged::absolute_end)
+        self.ranges.back().and_then(MultiRanged::absolute_end)
     }
 
     #[inline]
     fn contains(&self, element: Self::Step) -> bool {
-        self.ranges.iter().any(|range| range.contains(element))
+        self.ranges
+            .binary_search_by(|range| {
+                let start = range.absolute_start().expect("Range must have a start");
+                let end = range.absolute_end().expect("Range must have an end");
+
+                if element < start {
+                    std::cmp::Ordering::Greater
+                } else if element > end {
+                    std::cmp::Ordering::Less
+                } else {
+                    std::cmp::Ordering::Equal
+                }
+            })
+            .is_ok()
     }
 
     #[inline]
@@ -136,7 +144,7 @@ impl<N: Step> MultiRanged for MultiRange<N> {
 impl<N: Step> Default for MultiRange<N> {
     #[inline]
     fn default() -> Self {
-        Self { ranges: Vec::new() }
+        Self { ranges: VecDeque::new() }
     }
 }
 
@@ -145,10 +153,10 @@ impl<N: Step> Iterator for MultiRange<N> {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        let first_range = self.ranges.first_mut()?;
+        let first_range = self.ranges.front_mut()?;
         first_range.next().or_else(|| {
             // If the first range is exhausted, remove it and try the next one.
-            self.ranges.remove(0);
+            self.ranges.pop_front();
             self.next()
         })
     }
@@ -157,10 +165,10 @@ impl<N: Step> Iterator for MultiRange<N> {
 impl<N: Step> DoubleEndedIterator for MultiRange<N> {
     #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
-        let last_range = self.ranges.last_mut()?;
+        let last_range = self.ranges.back_mut()?;
         last_range.next_back().or_else(|| {
             // If the last range is exhausted, remove it and try the next one.
-            self.ranges.pop();
+            self.ranges.pop_back();
             self.ranges.shrink_to_fit();
             self.next_back()
         })
@@ -181,7 +189,7 @@ impl<N: Step> From<SimpleRange<N>> for MultiRange<N> {
             return Self::default();
         }
 
-        Self { ranges: vec![range] }
+        Self { ranges: VecDeque::from([range]) }
     }
 }
 
@@ -267,9 +275,9 @@ impl<N: Step> MultiRange<N> {
     /// # }
     /// ```
     pub fn checked_mul(&self, factor: N) -> Option<Self> {
-        let mut new_ranges = Vec::with_capacity(self.ranges.len());
+        let mut new_ranges = VecDeque::with_capacity(self.ranges.len());
         for range in &self.ranges {
-            new_ranges.push(range.checked_mul(factor)?);
+            new_ranges.push_back(range.checked_mul(factor)?);
         }
         Some(Self { ranges: new_ranges })
     }
