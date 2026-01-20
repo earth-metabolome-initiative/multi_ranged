@@ -202,31 +202,25 @@ impl<N: Step> TryFrom<(N, N)> for MultiRange<N> {
     }
 }
 
-impl<N: Step> TryFrom<&[N]> for MultiRange<N> {
-    type Error = Error<N>;
-
-    fn try_from(slice: &[N]) -> Result<Self, Self::Error> {
+impl<N: Step> From<&[N]> for MultiRange<N> {
+    fn from(slice: &[N]) -> Self {
         let mut multi_range = Self::default();
         for element in slice {
-            multi_range.insert(*element)?;
+            let _ = multi_range.insert(*element);
         }
-        Ok(multi_range)
+        multi_range
     }
 }
 
-impl<N: Step> TryFrom<Vec<N>> for MultiRange<N> {
-    type Error = Error<N>;
-
-    fn try_from(vec: Vec<N>) -> Result<Self, Self::Error> {
-        Self::try_from(vec.as_slice())
+impl<N: Step> From<Vec<N>> for MultiRange<N> {
+    fn from(vec: Vec<N>) -> Self {
+        Self::from(vec.as_slice())
     }
 }
 
-impl<N: Step, const L: usize> TryFrom<[N; L]> for MultiRange<N> {
-    type Error = Error<N>;
-
-    fn try_from(array: [N; L]) -> Result<Self, Self::Error> {
-        Self::try_from(array.as_slice())
+impl<N: Step, const L: usize> From<[N; L]> for MultiRange<N> {
+    fn from(array: [N; L]) -> Self {
+        Self::from(array.as_slice())
     }
 }
 
@@ -465,34 +459,31 @@ mod tests {
     }
 
     #[test]
-    fn test_try_from_slice() -> Result<(), Error<i32>> {
+    fn test_from_slice() {
         let slice = [1, 3, 5];
-        let range = MultiRange::try_from(&slice[..])?;
+        let range = MultiRange::from(&slice[..]);
         assert!(range.contains(1));
         assert!(range.contains(3));
         assert!(range.contains(5));
         assert!(!range.contains(2));
-        Ok(())
     }
 
     #[test]
-    fn test_try_from_vec() -> Result<(), Error<i32>> {
+    fn test_from_vec() {
         let vec = vec![1, 3, 5];
-        let range = MultiRange::try_from(vec)?;
+        let range = MultiRange::from(vec);
         assert!(range.contains(1));
         assert!(range.contains(3));
         assert!(range.contains(5));
-        Ok(())
     }
 
     #[test]
-    fn test_try_from_array() -> Result<(), Error<i32>> {
+    fn test_from_array() {
         let array = [1, 3, 5];
-        let range = MultiRange::try_from(array)?;
+        let range = MultiRange::from(array);
         assert!(range.contains(1));
         assert!(range.contains(3));
         assert!(range.contains(5));
-        Ok(())
     }
 
     #[test]

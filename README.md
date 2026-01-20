@@ -62,7 +62,7 @@ use multi_ranged::{MultiRange, MultiRanged};
 
 // Create a MultiRange from a slice of integers.
 // This creates two disjoint ranges: [1, 3] and [10, 12].
-let mut range = MultiRange::try_from([1, 2, 3, 10, 11, 12])?;
+let mut range = MultiRange::from([1, 2, 3, 10, 11, 12]);
 assert!(!range.is_dense());
 
 // Insert values that bridge the gap between [1, 3] and [10, 12].
