@@ -1,6 +1,6 @@
 //! Trait for types that can be used as range boundaries.
 
-use std::{
+use core::{
     fmt::Display,
     ops::{Mul, MulAssign},
 };

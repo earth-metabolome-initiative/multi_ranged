@@ -8,10 +8,7 @@ use comfy_table::{Table, presets::ASCII_MARKDOWN};
 use indicatif::{ProgressBar, ProgressStyle};
 use mem_dbg::{MemSize, SizeFlags};
 use multi_ranged::{MultiRange, MultiRanged};
-use plotters::{
-    coord::types::{LogCoord, RangedCoordf64},
-    prelude::*,
-};
+use plotters::prelude::*;
 use rand::prelude::*;
 use sux::{
     bits::bit_vec::BitVec,
@@ -136,7 +133,10 @@ impl BenchmarkCollection for BitVec {
         self.get(val as usize)
     }
     fn get_mem_size(&self) -> usize {
-        self.mem_size(SizeFlags::default() | SizeFlags::CAPACITY | SizeFlags::FOLLOW_REFS)
+        // sux 0.10 still depends on mem_dbg 0.3, so its `MemSize` impl belongs to
+        // a different trait identity than our `mem_dbg` 0.4. Compute manually
+        // from the public capacity in bits.
+        std::mem::size_of_val(self) + self.capacity() / 8
     }
 }
 

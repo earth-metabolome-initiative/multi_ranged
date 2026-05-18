@@ -1,13 +1,17 @@
 //! Submodule providing the `BiRange` struct.
 
-use std::ops::{Mul, MulAssign};
+use alloc::vec::Vec;
+#[cfg(feature = "mem_dbg")]
+#[allow(unused_imports)]
+use alloc::{string::String, vec};
+use core::ops::{Mul, MulAssign};
 
 use super::SimpleRange;
 use crate::{MultiRanged, Step, errors::Error};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "mem_dbg", derive(mem_dbg::MemSize, mem_dbg::MemDbg))]
+#[cfg_attr(feature = "mem_dbg", derive(mem_dbg::MemSize, mem_dbg::MemDbg), mem_size(flat))]
 /// A struct representing a range which may be split into two parts.
 ///
 /// # Examples
@@ -263,6 +267,8 @@ impl<N: Step> From<BiRange<N>> for Vec<N> {
 
 #[cfg(test)]
 mod tests {
+    use alloc::vec;
+
     use super::*;
 
     #[test]

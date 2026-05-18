@@ -1,7 +1,11 @@
 //! Multiple disjoint ranges implementation.
 
-use std::{
-    collections::VecDeque,
+use alloc::{collections::VecDeque, vec::Vec};
+#[cfg(feature = "mem_dbg")]
+#[allow(unused_imports)]
+use alloc::{string::String, vec};
+use core::{
+    cmp::Ordering,
     ops::{BitOr, BitOrAssign, Mul, MulAssign},
 };
 
@@ -27,6 +31,7 @@ use crate::{MultiRanged, Step, errors::Error};
 /// ```
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "mem_dbg", derive(mem_dbg::MemSize, mem_dbg::MemDbg))]
 pub struct MultiRange<N> {
     /// A deque of `SimpleRange` instances.
     ranges: VecDeque<SimpleRange<N>>,
@@ -53,11 +58,11 @@ impl<N: Step> MultiRanged for MultiRange<N> {
             let match_end = absolute_end.next();
 
             if element < match_start {
-                std::cmp::Ordering::Greater
+                Ordering::Greater
             } else if element > match_end {
-                std::cmp::Ordering::Less
+                Ordering::Less
             } else {
-                std::cmp::Ordering::Equal
+                Ordering::Equal
             }
         }) {
             Ok(mut index) => {
@@ -125,11 +130,11 @@ impl<N: Step> MultiRanged for MultiRange<N> {
                 let end = range.absolute_end().expect("Range must have an end");
 
                 if element < start {
-                    std::cmp::Ordering::Greater
+                    Ordering::Greater
                 } else if element > end {
-                    std::cmp::Ordering::Less
+                    Ordering::Less
                 } else {
-                    std::cmp::Ordering::Equal
+                    Ordering::Equal
                 }
             })
             .is_ok()
@@ -306,6 +311,8 @@ impl<N: Step> BitOrAssign for MultiRange<N> {
 
 #[cfg(test)]
 mod tests {
+    use alloc::vec;
+
     use super::*;
 
     #[test]

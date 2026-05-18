@@ -1,4 +1,7 @@
 #![doc = include_str!("../README.md")]
+#![no_std]
+
+extern crate alloc;
 
 pub mod errors;
 pub mod multi_ranged;

@@ -1,7 +1,7 @@
 //! Submodule providing the errors which may occur when using the `Ranged`
 //! trait.
 
-use std::fmt::Display;
+use core::fmt::Display;
 
 /// Error enumeration associated with the `Ranged` trait.
 ///

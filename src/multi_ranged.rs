@@ -1,6 +1,6 @@
 //! Common trait for range types.
 
-use std::ops::{Mul, MulAssign};
+use core::ops::{Mul, MulAssign};
 
 use crate::{Step, errors::Error};
 
