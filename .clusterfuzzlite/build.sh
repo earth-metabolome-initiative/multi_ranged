@@ -13,5 +13,11 @@ fi
 
 target_dir=fuzz/target/x86_64-unknown-linux-gnu/release
 for name in $targets; do
+    seeds="fuzz/seeds/$name"
+    if [[ ! -d "$seeds" ]] || [[ -z "$(ls -A "$seeds")" ]]; then
+        echo "$name has no seed corpus in $seeds" >&2
+        exit 1
+    fi
     cp "$target_dir/$name" "$OUT/"
+    zip -qj "$OUT/${name}_seed_corpus.zip" "$seeds"/*
 done
