@@ -8,7 +8,7 @@ edition = "2024"
 cargo-fuzz = true
 
 [dependencies]
-honggfuzz = "0.5"
+libfuzzer-sys = "0.4"
 multi_ranged = { path = "../" }
 
 # Prevent this from interfering with workspaces
