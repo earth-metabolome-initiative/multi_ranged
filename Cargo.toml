@@ -1,0 +1,68 @@
+[package]
+name = "multi_ranged"
+version = "0.1.2"
+edition = "2024"
+authors = ["Earth Metabolome Initiative"]
+license = "MIT"
+repository = "https://github.com/earth-metabolome-initiative/multi_ranged"
+description = "Efficient data structures for representing and manipulating ranges of discrete values"
+readme = "README.md"
+keywords = ["range", "intervals", "data-structures", "numeric", "collections"]
+categories = ["data-structures", "mathematics"]
+
+[dependencies]
+num-traits = { version = "0.2", default-features = false }
+serde = { version = "1.0", default-features = false, features = ["derive", "alloc"], optional = true }
+thiserror = { version = "2.0", default-features = false }
+mem_dbg = { version = "0.4.1", default-features = false, features = ["derive"], optional = true }
+
+[features]
+default = ["serde"]
+serde = ["dep:serde"]
+mem_dbg = ["dep:mem_dbg"]
+
+[workspace.lints.rust]
+missing_docs = "forbid"
+unused_macro_rules = "forbid"
+unconditional_recursion = "forbid"
+unreachable_patterns = "forbid"
+unused_import_braces = "forbid"
+unused_must_use = "forbid"
+deprecated = "deny"
+
+[workspace.lints.rustdoc]
+broken_intra_doc_links = "forbid"
+bare_urls = "forbid"
+invalid_codeblock_attributes = "forbid"
+invalid_html_tags = "forbid"
+missing_crate_level_docs = "forbid"
+unescaped_backticks = "forbid"
+redundant_explicit_links = "forbid"
+invalid_rust_codeblocks = "forbid"
+
+[workspace.lints.clippy]
+unreadable_literal = "allow"
+missing_panics_doc = "allow"
+new_ret_no_self = "allow"
+struct_excessive_bools = "allow"
+should_panic_without_expect = "allow"
+doc_markdown = "allow"
+clone_on_copy = "forbid"
+pedantic = { level = "deny", priority = -1 }
+
+[dev-dependencies]
+criterion = "0.8.1"
+plotters = "0.3.7"
+rand = "0.9.2"
+sux = "0.10.3"
+indicatif = "0.18.3"
+comfy-table = "7.1"
+mem_dbg = { version = "0.4.1", features = ["std", "derive"] }
+
+[[bench]]
+name = "benchmark"
+harness = false
+
+[[example]]
+name = "memory_benchmark"
+required-features = ["mem_dbg"]
