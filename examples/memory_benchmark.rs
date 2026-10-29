@@ -133,10 +133,7 @@ impl BenchmarkCollection for BitVec {
         self.get(val as usize)
     }
     fn get_mem_size(&self) -> usize {
-        // sux 0.10 still depends on mem_dbg 0.3, so its `MemSize` impl belongs to
-        // a different trait identity than our `mem_dbg` 0.4. Compute manually
-        // from the public capacity in bits.
-        std::mem::size_of_val(self) + self.capacity() / 8
+        self.mem_size(SizeFlags::default() | SizeFlags::CAPACITY | SizeFlags::FOLLOW_REFS)
     }
 }
 

@@ -48,7 +48,7 @@ fn benchmark_insertion_random(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("BitVec", size), &size, |b, &_s| {
             b.iter(|| {
-                let mut bv = BitVec::new((size * 2) as usize);
+                let mut bv: BitVec<Vec<usize>> = BitVec::new((size * 2) as usize);
                 for &i in &random_numbers {
                     bv.set(black_box(i) as usize, true);
                 }
@@ -73,7 +73,7 @@ fn benchmark_contains_random(c: &mut Criterion) {
         for &i in &random_numbers {
             let _ = multi_range.insert(i);
         }
-        let mut bit_vec = BitVec::new((size * 4) as usize);
+        let mut bit_vec: BitVec<Vec<usize>> = BitVec::new((size * 4) as usize);
         for &i in &random_numbers {
             bit_vec.set(i as usize, true);
         }
