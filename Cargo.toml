@@ -54,7 +54,7 @@ pedantic = { level = "deny", priority = -1 }
 criterion = "0.8.1"
 plotters = "0.3.7"
 rand = "0.9.2"
-sux = "0.10.3"
+sux = { version = "0.15.2", default-features = false }
 indicatif = "0.18.3"
 comfy-table = "7.1"
 mem_dbg = { version = "0.4.1", features = ["std", "derive"] }
